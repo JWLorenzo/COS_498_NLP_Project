@@ -1,0 +1,6 @@
+SENTIMENT_2_EMOJI_ID = "MLap/Sentiment2Emoji"
+SENTIMENT_2_EMOJI_TRAIN = "train.csv"
+SENTIMENT_2_EMOJI_TEST = "test.csv"
+TEXT_2_EMOJI_ID = "KomeijiForce/Text2Emoji"
+TEXT_2_EMOJI_FILE = "text2emoji.csv"
+DATA_FOLDER_NAME = "z_data"
