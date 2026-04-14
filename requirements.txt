@@ -1,0 +1,4 @@
+huggingface_hub==0.27.1
+huggingface_hub==1.10.2
+nltk==3.9.4
+pandas==3.0.2
