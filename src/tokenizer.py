@@ -1,58 +1,57 @@
-from nltk import download  # type: ignore
-from nltk.tokenize import word_tokenize  # type: ignore
-from nltk.corpus import stopwords  # type: ignore
-from nltk.stem import WordNetLemmatizer  # type: ignore
 import pandas as pd
 import a_CONSTANTS as C
-from nltk.tokenize import RegexpTokenizer  # type: ignore
+import spacy
+from spacy.tokens import Token
+from spacy.language import Language
 
 
-download("punkt_tab")
-download("stopwords")
-download("wordnet")
-download("omw-1.4")
+## Useless now, but keeping incase ##
+
+# def add_padding(
+#     sentence: list[str], n: int, left: str = "#", right: str = "#"
+# ) -> list[str]:
+#     return [left] * (n - 1) + sentence + [right] * (n - 1)
+
+# def pad_sentences(sentences: list[list[str]], n: int) -> list[list[str]]:
+#     results: list[list[str]] = []
+#     for sentence in sentences:
+#         result = add_padding(sentence, n)
+#         print(result)
+#         results.append(result)
+#     return results
 
 
-def tokenize_merged(merged: pd.DataFrame) -> list[list[str]]:
-    results: list[list[str]] = []
-
-    for _, row in merged.iterrows():
-        results.append(word_tokenize(str(row[C.CSV_COLUMN])))
-
-    return results
-
-
-def clean_stopwords(tokenized: list[list[str]]) -> list[list[str]]:
-    stop_words: set[str] = set(stopwords.words("english"))  # type: ignore
-    results: list[list[str]] = []
-
-    for tokens in tokenized:
-        results.append([token for token in tokens if token not in stop_words])
-
-    return results
+def clean_spaCy_single(text: str, nlp: Language) -> list[Token]:
+    doc = nlp(text)
+    tokens = [
+        token
+        for token in doc
+        if not any([token.is_punct, token.is_space, token.is_stop])
+    ]
+    return tokens
 
 
-def remove_punc(merged: pd.DataFrame) -> list[list[str]]:
-    results: list[list[str]] = []
+def extract_ngram(tokens: list[Token], n: int) -> list[tuple[str, int, int]]:
 
-    for _, row in merged.iterrows():
-        results.append(
-            [
-                token
-                for token in RegexpTokenizer(r"\w+").tokenize(  # type: ignore
-                    str(row[C.CSV_COLUMN])
-                )
-            ]
+    n_grams: list[tuple[str, int, int]] = []
+    for idx in range(len(tokens) - (n - 1)):
+        ngram: list[Token] = tokens[idx : idx + n]
+        n_grams.append(
+            (
+                "".join([word.text for word in ngram]),
+                ngram[0].idx,
+                ngram[-1].idx + len(ngram[-1].text),
+            )
         )
+    print(n_grams)
+    return n_grams
 
-    return results
 
-
-def lemmatize_tokens(tokenized: list[list[str]]) -> list[list[str]]:
-    lemmatizer = WordNetLemmatizer()
-    results: list[list[str]] = []
-
-    for tokens in tokenized:
-        results.append([lemmatizer.lemmatize(token) for token in tokens])
+def extract_ngrams(merged: pd.DataFrame, n: int) -> list[list[tuple[str, int, int]]]:
+    results: list[list[tuple[str, int, int]]] = []
+    nlp: Language = spacy.load("en_core_web_sm")
+    for _, row in merged.iterrows():
+        result: list[Token] = clean_spaCy_single(str(row[C.CSV_COLUMN]), nlp)
+        results.append(extract_ngram(result, n))
 
     return results
