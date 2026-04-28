@@ -46,12 +46,11 @@ def extract_ngram(tokens: list[Token], n: int) -> list[tuple[str, int, int]]:
         ngram: list[Token] = tokens[idx : idx + n]
         n_grams.append(
             (
-                "".join([word.text for word in ngram]),
+                " ".join([word.text for word in ngram]),
                 ngram[0].idx,
                 ngram[-1].idx + len(ngram[-1].text),
             )
         )
-    print(n_grams)
     return n_grams
 
 

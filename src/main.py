@@ -15,23 +15,33 @@ USE_GPU = True
 RERUN = False
 
 
-def generate_indexes(
-    vectors: NDArray[np.float32], frame: pd.DataFrame
-) -> tuple[NDArray[np.float32], list[str]]:
-    vec_list: list[Tensor] = [
-        vector for vector, emojis in zip(vectors, frame["emoji_list"]) for _ in emojis
+def create_emoji_mapping(
+    merged: pd.DataFrame, model: SentenceTransformer
+) -> list[tuple[str, NDArray[np.float32]]]:
+    sents: list[str] = merged["text"].tolist()
+    emoji_set: set[str] = set(
+        emoji for emojis in merged["emoji_list"].tolist() for emoji in emojis
+    )
+    vectors: NDArray[np.float32] = encoder(model, sents)
+    emoji_mapping: list[tuple[str, list[NDArray[np.float32]]]] = [
+        (
+            emoji,
+            [
+                vector
+                for vector, emojis in zip(vectors, merged["emoji_list"].to_list())
+                if emoji in emojis
+            ],
+        )
+        for emoji in emoji_set
     ]
 
-    emojis: list[str] = [emoji for emojis in frame["emoji_list"] for emoji in emojis]
-
-    vec_array: NDArray[np.float32] = np.array(vec_list)
-
-    return (vec_array, emojis)
+    return [(emoji, np.mean(vec, 0)) for emoji, vec in emoji_mapping]
 
 
 def encoder(
     model: SentenceTransformer, t_input: list[str] | str | pd.Series
 ) -> NDArray[np.float32]:
+    # Normalized the vectors to make the cosine similarity easier
     return np.array(
         model.encode(  # type: ignore
             t_input,
@@ -44,7 +54,7 @@ def encoder(
 
 def initialize_data(
     model: SentenceTransformer,
-) -> tuple[NDArray[np.float32], list[str]]:
+) -> tuple[list[str], NDArray[np.float32]]:
     merged: pd.DataFrame = D.process_dataframes(*D.get_dataset_contents())
     merged = merged.dropna(subset=["text"])
 
@@ -52,10 +62,10 @@ def initialize_data(
         merged = merged[:SAMPLE]
 
     merged["emoji_list"] = merged["emoji"].apply(T.process_emojis)
-
-    vectors: NDArray[np.float32] = encoder(model, merged["text"].tolist())
-    # Normalized the vectors to make the cosine similarity easier
-    return generate_indexes(vectors, merged)
+    mapping: list[tuple[str, NDArray[np.float32]]] = create_emoji_mapping(merged, model)
+    vectors: NDArray[np.float32] = np.array([vector for _, vector in mapping])
+    emojis: list[str] = [emoji for emoji, _ in mapping]
+    return (emojis, vectors)
 
 
 def get_similarities(
@@ -65,25 +75,23 @@ def get_similarities(
     return vectors @ vector
 
 
-def get_top_k(similarities: NDArray[np.float32], k: int) -> NDArray[np.float32]:
-    indices: NDArray[np.intp] | NDArray[np.float32] = np.argpartition(similarities, -k)[
-        -k:
-    ]
+def get_top_k(similarities: NDArray[np.float32], k: int) -> NDArray[np.intp]:
+    indices: NDArray[np.intp] = np.argpartition(similarities, -k)[-k:]
     return indices[np.argsort(similarities[indices])[::-1]]
 
 
 def main(model: SentenceTransformer) -> None:
     if not D.make_data_dir() or RERUN:
-        vec_array, emojis = initialize_data(model)
+        emojis, vec_array = initialize_data(model)
         D.save_data(vec_array, emojis)
     else:
         vec_array, emojis = D.load_data()
 
-    test: str = (
-        "Being a nurse is a rollercoaster of emotions, from comforting patients to dealing with medical emergencies."
-    )
+    # test: str = (
+    #     "Being a nurse is a rollercoaster of emotions, from comforting patients to dealing with medical emergencies."
+    # )
 
-    print(get_similarities(encoder(model, test), vec_array))
+    # print(get_similarities(encoder(model, test), vec_array))
 
 
 if __name__ == "__main__":
