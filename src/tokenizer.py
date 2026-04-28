@@ -3,6 +3,7 @@ import a_CONSTANTS as C
 import spacy
 from spacy.tokens import Token
 from spacy.language import Language
+import emoji
 
 
 ## Useless now, but keeping incase ##
@@ -19,6 +20,13 @@ from spacy.language import Language
 #         print(result)
 #         results.append(result)
 #     return results
+
+
+def process_emojis(emoji_str: str) -> list[str]:
+    ej_list: list[str] = []
+    for ej in emoji.emoji_list(emoji_str):
+        ej_list.append(ej["emoji"])
+    return ej_list
 
 
 def clean_spaCy_single(text: str, nlp: Language) -> list[Token]:

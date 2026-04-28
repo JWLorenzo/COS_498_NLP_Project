@@ -2,6 +2,10 @@ from huggingface_hub import hf_hub_download  # type: ignore
 import pandas as pd
 import a_CONSTANTS as C
 from pathlib import Path
+import numpy as np
+import pickle
+from pathlib import Path
+from numpy.typing import NDArray
 
 THIS_FILES_PATH = Path(__file__)
 ROOT_DIR = THIS_FILES_PATH.parents[1]
@@ -10,11 +14,11 @@ RENAME_DICT = {"Sentence": "text", "Emoji": "emoji"}
 MERGE_NAME = "merged.csv"
 
 
-def make_data_dir():
+def make_data_dir() -> bool:
 
     if not DATA_PATH.exists():
         DATA_PATH.mkdir(exist_ok=True)
-    return True
+    return (DATA_PATH / C.VECTORS).exists() and (DATA_PATH / C.EMOJIS).exists()
 
 
 def get_dataset_contents() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -64,3 +68,17 @@ def process_dataframes(
     df_4.to_csv(DATA_PATH / MERGE_NAME)
 
     return df_4
+
+
+def save_data(vec_list: NDArray[np.float32], emojis: list[str]) -> None:
+
+    np.save(DATA_PATH / C.VECTORS, vec_list)
+    with open(DATA_PATH / C.EMOJIS, "wb") as f:
+        pickle.dump(emojis, f)
+
+
+def load_data() -> tuple[NDArray[np.float32], list[str]]:
+    with open(DATA_PATH / C.EMOJIS, "rb") as f:
+        data = pickle.load(f)
+
+    return (np.load(DATA_PATH / C.VECTORS), data)
