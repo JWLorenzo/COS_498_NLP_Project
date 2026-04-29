@@ -54,11 +54,10 @@ def extract_ngram(tokens: list[Token], n: int) -> list[tuple[str, int, int]]:
     return n_grams
 
 
-def extract_ngrams(merged: pd.DataFrame, n: int) -> list[list[tuple[str, int, int]]]:
-    results: list[list[tuple[str, int, int]]] = []
-    nlp: Language = spacy.load("en_core_web_sm")
-    for _, row in merged.iterrows():
-        result: list[Token] = clean_spaCy_single(str(row[C.CSV_COLUMN]), nlp)
-        results.append(extract_ngram(result, n))
+# def extract_ngrams(merged: pd.DataFrame, n: int, nlp:Language) -> list[list[tuple[str, int, int]]]:
+#     results: list[list[tuple[str, int, int]]] = []
+#     for _, row in merged.iterrows():
+#         result: list[Token] = clean_spaCy_single(str(row[C.CSV_COLUMN]), nlp)
+#         results.append(extract_ngram(result, n))
 
-    return results
+#     return results

@@ -5,7 +5,8 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer
 from numpy.typing import NDArray
 import numpy as np
-from torch import Tensor
+import spacy
+from spacy.language import Language
 
 SAMPLE = 20000
 BATCH_SIZE = 128
@@ -13,6 +14,8 @@ BATCH_SIZE = 128
 USE_SAMPLE = False
 USE_GPU = True
 RERUN = False
+MAX_N = 2
+REPLACEMENTS = 6
 
 
 def create_emoji_mapping(
@@ -80,24 +83,87 @@ def get_top_k(similarities: NDArray[np.float32], k: int) -> NDArray[np.intp]:
     return indices[np.argsort(similarities[indices])[::-1]]
 
 
-def main(model: SentenceTransformer) -> None:
+def get_emoji_slices(
+    selection_sorted: list[tuple[tuple[str, int, int], str, np.float32]],
+) -> list[tuple[tuple[str, int, int], str, np.float32]]:
+    selected: list[tuple[tuple[str, int, int], str, np.float32]] = []
+    count: int = 0
+    curr_idx: int = 0
+    running: bool = True
+    while running:
+        enabled: bool = True
+        for ngram in selected:
+            s1: int = selection_sorted[curr_idx][0][1]
+            e1: int = selection_sorted[curr_idx][0][2]
+            s2: int = ngram[0][1]
+            e2: int = ngram[0][2]
+            if not (s1 >= e2 or s2 >= e1):
+                enabled = False
+        if enabled:
+            selected.append(selection_sorted[curr_idx])
+            count += 1
+        curr_idx += 1
+
+        if count >= REPLACEMENTS or curr_idx > len(selection_sorted) - 1:
+            running = False
+    return sorted(selected, key=lambda x: float(x[0][1]))
+
+
+def construct_sentence(
+    selected_sorted: list[tuple[tuple[str, int, int], str, np.float32]], word_input: str
+) -> str:
+    sliced_index: int = 0
+    final_list: str = ""
+    for ngram in selected_sorted:
+        final_list += word_input[sliced_index : ngram[0][1]] + ngram[1]
+        sliced_index = ngram[0][2]
+    final_list += word_input[sliced_index:]
+    return final_list
+
+
+def main(model: SentenceTransformer, nlp: Language) -> None:
     if not D.make_data_dir() or RERUN:
         emojis, vec_array = initialize_data(model)
         D.save_data(vec_array, emojis)
     else:
         vec_array, emojis = D.load_data()
 
-    # test: str = (
-    #     "Being a nurse is a rollercoaster of emotions, from comforting patients to dealing with medical emergencies."
-    # )
+    word_input: str = (
+        "Being a nurse is a rollercoaster of emotions, from comforting patients to dealing with medical emergencies."
+    )
+    n_grams: list[tuple[str, int, int]] = [
+        n_gram
+        for n in range(1, MAX_N + 1)
+        for n_gram in T.extract_ngram(T.clean_spaCy_single(word_input, nlp), n)
+    ]
 
-    # print(get_similarities(encoder(model, test), vec_array))
+    similarities: NDArray[np.float32] = np.array(
+        [get_similarities(encoder(model, n_gram[0]), vec_array) for n_gram in n_grams]
+    )
+
+    similarity_struct: list[tuple[tuple[str, int, int], str, np.float32]] = [
+        (ngram, emojis[idx := get_top_k(similarity, 1)[-1]], similarity[idx])
+        for ngram, similarity in zip(n_grams, similarities)
+    ]
+
+    selection_sorted: list[tuple[tuple[str, int, int], str, np.float32]] = sorted(
+        similarity_struct, reverse=True, key=lambda x: float(x[2])
+    )
+
+    selected_sorted: list[tuple[tuple[str, int, int], str, np.float32]] = (
+        get_emoji_slices(selection_sorted)
+    )
+
+    final_list: str = construct_sentence(selected_sorted, word_input)
+    print(selected_sorted)
+    print(final_list)
 
 
 if __name__ == "__main__":
+    nlp: Language = spacy.load("en_core_web_sm")
     # https://sbert.net/ for model
     if USE_GPU:
         model = SentenceTransformer(C.MODEL, device="cuda")
     else:
         model = SentenceTransformer(C.MODEL)
-    main(model)
+    main(model, nlp)
